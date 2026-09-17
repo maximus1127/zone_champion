@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ZoneChampion.Core/ZoneChampion.Core.csproj" />
+    <Project Path="src/ZoneChampion/ZoneChampion.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ZoneChampion.Core.Tests/ZoneChampion.Core.Tests.csproj" />
+  </Folder>
+</Solution>
