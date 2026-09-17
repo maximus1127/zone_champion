@@ -38,6 +38,7 @@ public sealed class PanelStyle
     public double AlignmentOffset { get; set; } = 0;
     public bool HideWhenEmpty { get; set; } = true;
     public bool HideOnFullscreen { get; set; } = true;
+    public bool HideWhenMaximized { get; set; } = true;
 
     // Panel body
     public string Background { get; set; } = "#1E1E2E";

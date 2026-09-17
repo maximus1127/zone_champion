@@ -22,6 +22,7 @@ internal sealed class AppController : IDisposable
     private WindowTracker? _tracker;
     private PanelManager? _panels;
     private TrayIcon? _tray;
+    private ToggleHotkeyHook? _hotkey;
     private FileSystemWatcher? _fancyZonesWatcher;
     private DispatcherTimer? _zoneReload;
     private DispatcherTimer? _heartbeat;
@@ -55,7 +56,7 @@ internal sealed class AppController : IDisposable
 
         _tray = new TrayIcon();
         _tray.IdentifyZones += IdentifyZones;
-        _tray.PanelsHiddenChanged += hidden => _panels.PanelsHidden = hidden;
+        _tray.TogglePanels += TogglePanels;
         _tray.EditSettings += () => OpenInShell(_settings.FilePath, edit: true);
         _tray.OpenSettingsFolder += () => OpenInShell(Log.FolderPath, edit: false);
         _tray.Reload += () =>
@@ -73,6 +74,9 @@ internal sealed class AppController : IDisposable
             _tray.ShowWarning("Settings not applied", error);
         }
 
+        _hotkey = new ToggleHotkeyHook(() => _dispatcher.BeginInvoke(TogglePanels));
+        ApplyToggleHotkey();
+
         _zoneReload = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Normal, (_, _) =>
         {
             _zoneReload!.Stop();
@@ -88,9 +92,31 @@ internal sealed class AppController : IDisposable
         ReloadZones();
     }
 
+    /// <summary>Hides or shows every panel. Shared by the tray menu and the toggle hotkey.</summary>
+    private void TogglePanels()
+    {
+        if (_panels is null)
+        {
+            return;
+        }
+
+        bool hidden = !_panels.PanelsHidden;
+        _panels.PanelsHidden = hidden;
+        _tray?.SetPanelsHidden(hidden);
+        Log.Info(hidden ? "Panels hidden" : "Panels shown");
+    }
+
+    private void ApplyToggleHotkey()
+    {
+        var hotkey = _settings.Current.ToggleHotkey;
+        _hotkey?.SetChord(hotkey);
+        _tray?.SetToggleHotkey(hotkey?.ToString());
+    }
+
     private void OnSettingsChanged()
     {
         AutoStart.Apply(_settings.Current.StartWithWindows);
+        ApplyToggleHotkey();
         if (!string.Equals(_fancyZonesFolder, FancyZonesFolder, StringComparison.OrdinalIgnoreCase))
         {
             ReloadZones();
@@ -250,6 +276,7 @@ internal sealed class AppController : IDisposable
 
     public void Dispose()
     {
+        _hotkey?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _heartbeat?.Stop();
         _zoneReload?.Stop();

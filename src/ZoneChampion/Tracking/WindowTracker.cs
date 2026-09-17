@@ -21,6 +21,12 @@ internal sealed class TrackedWindow
     public bool IsMaximized { get; set; }
     public RectI Bounds { get; set; }
     public Zone? Zone { get; set; }
+
+    /// <summary>Instance id of the monitor the window is on, if it's one we know.</summary>
+    public string? MonitorInstanceId { get; set; }
+
+    /// <summary>Stacking position among tracked windows; 0 is frontmost.</summary>
+    public int ZOrder { get; set; }
 }
 
 /// <summary>
@@ -41,6 +47,7 @@ internal sealed class WindowTracker : IDisposable
     private IReadOnlyList<Zone> _zones = [];
     private Dictionary<nint, DisplayMonitor> _monitors = new();
     private long _sequence;
+    private List<nint> _stackingOrder = new();
 
     public WindowTracker()
     {
@@ -116,10 +123,13 @@ internal sealed class WindowTracker : IDisposable
             return true;
         }, 0);
 
+        // Stacking order matters for "is a maximized window in front on this monitor?".
+        bool changed = forceChanged || !found.SequenceEqual(_stackingOrder);
+        _stackingOrder = found.ToList();
+
         // EnumWindows lists front-to-back; number never-seen windows back-to-front so the startup order is stable.
         found.Reverse();
 
-        bool changed = forceChanged;
         var seen = new HashSet<nint>(found.Count);
         foreach (var hwnd in found)
         {
@@ -179,6 +189,8 @@ internal sealed class WindowTracker : IDisposable
         window.IsMaximized = maximized;
         window.Bounds = bounds;
         window.Zone = zone;
+        window.MonitorInstanceId = monitorId;
+        window.ZOrder = _stackingOrder.IndexOf(hwnd);
         return changed;
     }
 

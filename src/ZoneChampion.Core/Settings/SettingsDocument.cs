@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using ZoneChampion.Core.Input;
 
 namespace ZoneChampion.Core.Settings;
 
@@ -43,16 +44,18 @@ public sealed class SettingsDocument
     private readonly JsonObject _panel;
     private readonly Dictionary<(string, string, int), ResolvedPanelSettings> _cache = new();
 
-    private SettingsDocument(bool startWithWindows, string? fancyZonesDataFolder, JsonObject panel, IReadOnlyList<ZoneOverride> overrides)
+    private SettingsDocument(JsonObject panel, IReadOnlyList<ZoneOverride> overrides)
     {
-        StartWithWindows = startWithWindows;
-        FancyZonesDataFolder = fancyZonesDataFolder;
         _panel = panel;
         Overrides = overrides;
     }
 
-    public bool StartWithWindows { get; }
-    public string? FancyZonesDataFolder { get; }
+    public bool StartWithWindows { get; private init; }
+    public string? FancyZonesDataFolder { get; private init; }
+
+    /// <summary>Modifier keys that hide or show every panel when tapped together, or null when turned off.</summary>
+    public KeyChord? ToggleHotkey { get; private init; }
+
     public IReadOnlyList<ZoneOverride> Overrides { get; }
 
     public static SettingsDocument Default { get; } = Parse(DefaultSettings.Text);
@@ -73,6 +76,7 @@ public sealed class SettingsDocument
 
         bool startWithWindows = true;
         string? fancyZonesDataFolder = null;
+        KeyChord? toggleHotkey = KeyChord.Default; // settings files from before this option existed get the default
         var panel = new JsonObject();
         var overrides = new List<ZoneOverride>();
 
@@ -85,6 +89,15 @@ public sealed class SettingsDocument
                     break;
                 case "fancyzonesdatafolder":
                     fancyZonesDataFolder = Read<string?>(value, name);
+                    break;
+                case "togglehotkey":
+                    var keys = Read<string?>(value, name);
+                    toggleHotkey = null;
+                    if (!string.IsNullOrWhiteSpace(keys) && !KeyChord.TryParse(keys, out toggleHotkey, out var keyError))
+                    {
+                        throw new SettingsException($"{name}: {keyError}.");
+                    }
+
                     break;
                 case "panel":
                     panel = value as JsonObject ?? throw new SettingsException("\"panel\" must be an object.");
@@ -102,7 +115,12 @@ public sealed class SettingsDocument
             }
         }
 
-        var document = new SettingsDocument(startWithWindows, fancyZonesDataFolder, (JsonObject)panel.DeepClone(), overrides);
+        var document = new SettingsDocument((JsonObject)panel.DeepClone(), overrides)
+        {
+            StartWithWindows = startWithWindows,
+            FancyZonesDataFolder = fancyZonesDataFolder,
+            ToggleHotkey = toggleHotkey,
+        };
 
         // Surface mistakes now rather than when a matching zone shows up.
         BuildStyle(document._panel, "panel");

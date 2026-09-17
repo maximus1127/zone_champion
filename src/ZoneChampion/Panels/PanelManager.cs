@@ -72,6 +72,9 @@ internal sealed class PanelManager : IPanelHost, IDisposable
         ForgetClosedWindows();
 
         var fullscreenMonitor = FindFullscreenMonitor();
+        var maximizedMonitors = MonitorCoverage.CoveredByMaximizedWindow(_tracker.Windows
+            .OrderBy(w => w.ZOrder)
+            .Select(w => new StackedWindow(w.MonitorInstanceId, w.IsMinimized, w.IsMaximized)));
         var live = new HashSet<ZoneKey>();
 
         foreach (var zone in _zones)
@@ -86,7 +89,8 @@ internal sealed class PanelManager : IPanelHost, IDisposable
             var handles = _ordering.Get(zone.Key);
             bool show = !_panelsHidden
                 && (handles.Count > 0 || !style.HideWhenEmpty)
-                && !(style.HideOnFullscreen && fullscreenMonitor == zone.Monitor.InstanceId);
+                && !(style.HideOnFullscreen && fullscreenMonitor == zone.Monitor.InstanceId)
+                && !(style.HideWhenMaximized && maximizedMonitors.Contains(zone.Monitor.InstanceId));
 
             var theme = GetTheme(zone, style);
             if (!_panels.TryGetValue(zone.Key, out var panel))

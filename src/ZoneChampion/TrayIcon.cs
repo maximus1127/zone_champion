@@ -9,7 +9,6 @@ internal sealed class TrayIcon : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ToolStripMenuItem _hideItem;
-    private bool _panelsHidden;
 
     public TrayIcon()
     {
@@ -22,12 +21,7 @@ internal sealed class TrayIcon : IDisposable
         };
 
         menu.Items.Add(Item("Identify zones", () => IdentifyZones?.Invoke()));
-        _hideItem = Item("Hide panels", () =>
-        {
-            _panelsHidden = !_panelsHidden;
-            _hideItem!.Text = _panelsHidden ? "Show panels" : "Hide panels";
-            PanelsHiddenChanged?.Invoke(_panelsHidden);
-        });
+        _hideItem = Item("Hide panels", () => TogglePanels?.Invoke());
         menu.Items.Add(_hideItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Item("Edit settings", () => EditSettings?.Invoke()));
@@ -47,11 +41,20 @@ internal sealed class TrayIcon : IDisposable
     }
 
     public event Action? IdentifyZones;
-    public event Action<bool>? PanelsHiddenChanged;
+    public event Action? TogglePanels;
     public event Action? EditSettings;
     public event Action? OpenSettingsFolder;
     public event Action? Reload;
     public event Action? Exit;
+
+    public void SetPanelsHidden(bool hidden)
+    {
+        _hideItem.Text = hidden ? "Show panels" : "Hide panels";
+        _icon.Text = hidden ? "Zone Champion (panels hidden)" : "Zone Champion";
+    }
+
+    /// <summary>Shows the toggle hotkey beside the Hide/Show panels item, or nothing if it's turned off.</summary>
+    public void SetToggleHotkey(string? hotkey) => _hideItem.ShortcutKeyDisplayString = hotkey ?? "";
 
     public void ShowWarning(string title, string message) =>
         _icon.ShowBalloonTip(8000, title, message, Forms.ToolTipIcon.Warning);

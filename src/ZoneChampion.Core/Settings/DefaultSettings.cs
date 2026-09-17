@@ -15,6 +15,12 @@ public static class DefaultSettings
           // Folder holding FancyZones' layout files. null = the default PowerToys location.
           "fancyZonesDataFolder": null,
 
+          // Press and release these keys together to hide every panel (e.g. to reach controls a panel covers);
+          // do it again to bring them back. Only counts when no other key is pressed in between, so shortcuts
+          // like Ctrl+Win+Left are unaffected. Join modifier keys with "+": Ctrl, Alt, Shift, Win, or one side
+          // only with LCtrl, RCtrl, LAlt, RAlt, LShift, RShift, LWin, RWin. null turns this off.
+          "toggleHotkey": "Ctrl+Win",
+
           // Style shared by every panel. Any of these can be overridden for one zone under "zones" below.
           "panel": {
             // ---- Placement ----
@@ -31,6 +37,8 @@ public static class DefaultSettings
             "hideWhenEmpty": true,
             // Hide the panels on a monitor while a full-screen app (video, game, slideshow) is in front.
             "hideOnFullscreen": true,
+            // Hide the panels on a monitor while its frontmost window is maximized (it covers every zone).
+            "hideWhenMaximized": true,
 
             // ---- Panel body ----
             "background": "#1E1E2E",

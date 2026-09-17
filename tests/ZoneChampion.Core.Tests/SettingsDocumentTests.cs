@@ -17,6 +17,17 @@ public class SettingsDocumentTests
             JsonSerializer.Serialize(fromFile, SettingsDocument.JsonOptions));
         Assert.True(SettingsDocument.Default.StartWithWindows);
         Assert.Null(SettingsDocument.Default.FancyZonesDataFolder);
+        Assert.Equal("Ctrl+Win", SettingsDocument.Default.ToggleHotkey?.ToString());
+    }
+
+    [Theory]
+    [InlineData("{ }", "Ctrl+Win")]
+    [InlineData("""{ "toggleHotkey": "Alt+Shift" }""", "Alt+Shift")]
+    [InlineData("""{ "toggleHotkey": null }""", null)]
+    [InlineData("""{ "toggleHotkey": "" }""", null)]
+    public void ToggleHotkey_DefaultsWhenMissingAndCanBeTurnedOff(string json, string? expected)
+    {
+        Assert.Equal(expected, SettingsDocument.Parse(json).ToggleHotkey?.ToString());
     }
 
     [Fact]
@@ -65,6 +76,7 @@ public class SettingsDocumentTests
     [InlineData("""{ "zones": [ { "zone": 0 } ] }""", "zone numbers start at 1")]
     [InlineData("""{ "pannel": {} }""", "Unknown setting \"pannel\"")]
     [InlineData("""{ "panel": { """, "isn't valid JSON")]
+    [InlineData("""{ "toggleHotkey": "Tab+Space" }""", "toggleHotkey: \"Tab\" isn't a modifier key")]
     public void InvalidSettings_ExplainTheProblem(string json, string expectedMessagePart)
     {
         var ex = Assert.Throws<SettingsException>(() => SettingsDocument.Parse(json));
