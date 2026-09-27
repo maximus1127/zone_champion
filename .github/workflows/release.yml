@@ -1,0 +1,37 @@
+# Push a version tag (for example v0.2.0) to build Zone Champion and publish it as a GitHub release.
+# The release has a self-contained exe per architecture, so downloaders don't need .NET installed.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet test ZoneChampion.slnx -c Release
+
+      - name: Build
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          foreach ($runtime in 'win-x64', 'win-arm64') {
+            .\tools\Publish.ps1 -Runtime $runtime -SelfContained
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Copy-Item publish\ZoneChampion.exe "release\ZoneChampion-$runtime.exe"
+          }
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem release\*.exe).FullName --title $env:GITHUB_REF_NAME --generate-notes

@@ -33,7 +33,7 @@ The Windows taskbar knows about physical monitors, not zones. Multi-monitor task
 - **Reads FancyZones layouts directly.** It supports grid, priority grid, columns, rows, focus, custom grid and canvas layouts, and updates as soon as you change a layout in the FancyZones editor.
 - **Multi-monitor and mixed DPI.** Monitors with different scaling (for example a 100% TV next to a 125% laptop screen) line up to the pixel.
 - **Virtual desktop aware.** Panels show only windows on the current virtual desktop.
-- **Lightweight.** A single ~500 KB executable using near-zero CPU while idle. It never steals focus and runs from the system tray.
+- **Lightweight.** A single executable using near-zero CPU while idle. It never steals focus and runs from the system tray.
 
 ## Who it's for
 
@@ -68,22 +68,40 @@ If what you want from monitor splitting is a separate taskbar for each region of
 
 ## Requirements
 
-- Windows 11 (also targets Windows 10)
+- Windows 11 or 10, 64-bit (x64 or ARM)
 - Microsoft PowerToys, with FancyZones enabled and a layout applied to your monitors
-- .NET 10 Desktop Runtime (included with the .NET 10 SDK)
+
+You don't need to install .NET. Both install options below take care of it.
 
 ## Install
 
-Build from source with the .NET 10 SDK:
+### Download
+
+1. From the [latest release](https://github.com/maximus1127/zone_champion/releases/latest), download `ZoneChampion-win-x64.exe`. On an ARM PC, such as a Snapdragon laptop, download `ZoneChampion-win-arm64.exe` instead.
+2. Move it to a folder where it can stay, such as `%LOCALAPPDATA%\Programs\ZoneChampion`. It starts with Windows from wherever you run it, so don't run it from Downloads.
+3. Double-click it. The exe isn't code-signed, so Windows SmartScreen may warn you: choose **More info**, then **Run anyway**.
+
+The download includes its own copy of .NET, which is why it's about 75 MB.
+
+### Build from source
+
+Download or clone this repo, then double-click `Install.cmd`. It builds Zone Champion, installs it to `%LOCALAPPDATA%\Programs\ZoneChampion` and starts it.
+- **Nothing to install first.** If the PC has no .NET 10 SDK, the script downloads one (about 300 MB) into `.dotnet` in the repo folder. It needs no admin rights and installs nothing system-wide.
+- **Size:** if the .NET 10 Desktop Runtime is installed, you get a ~500 KB exe that uses it. Otherwise the exe carries its own .NET.
+
+From a terminal:
 
 ```powershell
 .\tools\Publish.ps1 -Install                   # build, copy to %LOCALAPPDATA%\Programs\ZoneChampion and start it
 .\tools\Publish.ps1                            # just build a single ZoneChampion.exe into .\publish
-dotnet run --project src/ZoneChampion          # run a debug build straight from the repo
+.\tools\Publish.ps1 -SelfContained             # build an exe that runs on PCs without .NET, to copy to another PC
+dotnet run --project src/ZoneChampion          # run a debug build straight from the repo (needs the .NET 10 SDK)
 dotnet test                                    # unit tests for zone math, assignment, ordering, hotkey, settings
 ```
 
 Release builds add themselves to startup (HKCU `Run` key) while `"startWithWindows"` is `true`. Debug builds never touch startup.
+
+Pushing a version tag such as `v0.2.0` makes GitHub Actions run the tests, build both release exes and publish them as a GitHub release ([release.yml](.github/workflows/release.yml)).
 
 ## Using it
 
@@ -158,6 +176,8 @@ Everything under `"panel"` applies to all panels:
 
 ## Troubleshooting
 
+- **"The current .NET SDK does not support targeting .NET 10.0" or "A compatible .NET SDK was not found":** plain `dotnet` commands need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). `Install.cmd` and `tools\Publish.ps1` don't: they find a suitable SDK or download one.
+- **"Running scripts is disabled on this system":** Windows blocks PowerShell scripts by default. Use `Install.cmd`, or run `powershell -ExecutionPolicy Bypass -File tools\Publish.ps1 -Install`.
 - **Log:** `%APPDATA%\ZoneChampion\zonechampion.log`
 - **Diagnostics:** `ZoneChampion.exe --diagnose [file]` writes a report without showing any panels, to `%APPDATA%\ZoneChampion\diagnostics.txt` by default. The report lists monitors and their FancyZones ids, the layout and zone rectangles for each monitor, which edge each panel uses, and every window with the zone it was assigned to.
 - **Snapshots:** `ZoneChampion.exe --snapshot <folder> [seconds]` starts normally. After the delay (3 seconds by default), it saves each panel and one right-click menu as PNGs, plus `panels.txt` with panel positions and contents, then exits. It renders only Zone Champion's own visuals.
