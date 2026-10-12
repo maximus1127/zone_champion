@@ -22,6 +22,7 @@ The Windows taskbar knows about physical monitors, not zones. Multi-monitor task
 - **Tell identical windows apart.** Hover an icon to see the window title, or give a window a color tag from the right-click menu.
 - **Move windows between zones** from the right-click menu, including zones on other monitors.
 - **Hide all panels with a hotkey.** Tap Ctrl+Win (configurable) to hide them and tap again to bring them back.
+- **Swap screens with a hotkey.** Tap Ctrl+Alt+Win (configurable) to swap every window between your two monitors, so whatever was on the side screen is now in front of you. Tap again to swap back. Windows keep their position, size and maximized or minimized state.
 - **Stays out of the way.** A monitor's panels hide while a maximized window is in front or a full-screen app, video or game is playing.
 - **Customizable like KDE Plasma panels:**
   - Panel placement: left, right, top or bottom edge of each zone, including vertical taskbars on the side of a zone
@@ -112,10 +113,12 @@ Pushing a version tag such as `v0.2.0` makes GitHub Actions run the tests, build
 | Hover an icon | Shows the window title |
 | Right-click an icon | Color tag, move the window to another zone, close the window |
 | Tap **Ctrl+Win** (press both, release both) | Hides every panel, for example to reach controls a panel covers. Tap again to bring them back. |
+| Tap **Ctrl+Alt+Win** | Swaps every window between your two monitors. Tap again to swap back. |
 
 The tray icon's menu has:
 - **Identify zones:** labels every zone with its monitor id and zone number, which you use in the settings file. Double-clicking the tray icon does the same.
 - **Hide panels / Show panels:** the same toggle as the hotkey. While panels are hidden, the tray tooltip says so.
+- **Swap screens:** the same as the swap screens hotkey.
 - **Edit settings**
 - **Open settings folder**
 - **Reload**
@@ -172,6 +175,12 @@ Everything under `"panel"` applies to all panels:
 - **When it counts:** only when the keys are pressed and released with no other key in between. Shortcuts such as Ctrl+Win+Left still work normally.
 - **Start menu:** Zone Champion sends a no-op key press so letting go of Win doesn't open the Start menu.
 
+`"swapScreensHotkey"` sets the keys that swap every window between your two monitors. The default is `"Ctrl+Alt+Win"`, and `null` turns it off. The key rules are the same as for `toggleHotkey`, and the two can't be the same keys. Tapping Ctrl+Alt+Win doesn't also count as a tap of Ctrl+Win.
+- **What moves:** app windows (the ones with taskbar buttons) and the dialogs and palettes they own, on the current virtual desktop. Desktop widgets, overlays, the taskbar and the desktop stay put, and so does the mouse pointer.
+- **Where they go:** each window lands at the same relative spot on the other monitor. If the monitors differ in size or FancyZones layout, positions and sizes are scaled to the other monitor's work area. A window that was maximized or full screen stays that way, and a minimized one stays minimized but restores on the other monitor.
+- **Focus:** nothing is activated, so the window you were typing in keeps focus and the stacking order stays the same.
+- **Monitors:** it needs exactly two monitors. With any other number, the tray shows a message instead.
+
 `"fancyZonesDataFolder"` overrides where the FancyZones layout files are read from. The default is `%LOCALAPPDATA%\Microsoft\PowerToys\FancyZones`.
 
 ## Troubleshooting
@@ -185,7 +194,7 @@ Everything under `"panel"` applies to all panels:
 ## Known limitations
 
 - Panels float over the edge of the windows in their zone. They don't reserve space, but the toggle hotkey hides them when something underneath needs a click.
-- Windows running as administrator can't be minimized, moved or closed from the panel unless Zone Champion also runs as administrator. Windows blocks lower-privilege apps from controlling them. For the same reason, the toggle hotkey doesn't register while an administrator window has focus.
+- Windows running as administrator can't be minimized, moved or closed from the panel unless Zone Champion also runs as administrator. Windows blocks lower-privilege apps from controlling them. For the same reason, the hotkeys don't register while an administrator window has focus, and swapping screens leaves administrator windows where they are.
 - FancyZones' "span zones across monitors" mode isn't supported. Each monitor's layout is read separately.
 - Icons can't be dragged from one panel to another. Use right-click, then **Move to**.
 - The window list is the only panel widget. There's no clock, launcher or system tray widget.
@@ -197,7 +206,8 @@ Everything under `"panel"` applies to all panels:
 | FancyZones file parsing and a port of its zone math (grid, priority-grid, columns, rows, focus, canvas) | `src/ZoneChampion.Core/FancyZones` |
 | Largest-overlap zone assignment and maximized-window coverage | `src/ZoneChampion.Core/Zones` |
 | Icon order, panel placement, settings parsing and per-zone merging | `src/ZoneChampion.Core/Panels`, `src/ZoneChampion.Core/Settings` |
-| Toggle hotkey parsing and tap detection | `src/ZoneChampion.Core/Input` |
+| Hotkey parsing and tap detection | `src/ZoneChampion.Core/Input` |
+| Swap screens geometry (which monitor a window is on, proportional mapping) | `src/ZoneChampion.Core/Screens` |
 | Win32 interop: monitors, virtual desktops, window events, window actions, keyboard hook | `src/ZoneChampion/Interop` |
 | Window list (throttled rescans on window events) and icon loading | `src/ZoneChampion/Tracking` |
 | Panel windows, theme, right-click menu, zone labels | `src/ZoneChampion/Panels` |
@@ -206,7 +216,7 @@ Everything under `"panel"` applies to all panels:
 - **Zone math:** the zone calculations mirror PowerToys 0.100's `LayoutConfigurator.cpp` exactly, including integer rounding, so panel edges land on the same pixels as FancyZones' zones. Unit tests cover it against a real layout.
 - **Coordinates:** the app runs per-monitor DPI aware and positions everything in physical pixels, so mixed-scaling setups line up.
 - **Focus:** panels never take focus. That's what lets "click the focused window's icon to minimize" work.
-- **Stack:** C#, .NET 10 and WPF, using WinEvent hooks for window tracking and a low-level keyboard hook for the hotkey.
+- **Stack:** C#, .NET 10 and WPF, using WinEvent hooks for window tracking and a low-level keyboard hook for the hotkeys.
 
 `tools/New-AppIcon.ps1` regenerates `src/ZoneChampion/Assets/ZoneChampion.ico`.
 

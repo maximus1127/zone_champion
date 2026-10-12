@@ -56,6 +56,9 @@ public sealed class SettingsDocument
     /// <summary>Modifier keys that hide or show every panel when tapped together, or null when turned off.</summary>
     public KeyChord? ToggleHotkey { get; private init; }
 
+    /// <summary>Modifier keys that swap every window between two monitors when tapped together, or null when off.</summary>
+    public KeyChord? SwapScreensHotkey { get; private init; }
+
     public IReadOnlyList<ZoneOverride> Overrides { get; }
 
     public static SettingsDocument Default { get; } = Parse(DefaultSettings.Text);
@@ -76,7 +79,9 @@ public sealed class SettingsDocument
 
         bool startWithWindows = true;
         string? fancyZonesDataFolder = null;
-        KeyChord? toggleHotkey = KeyChord.Default; // settings files from before this option existed get the default
+        // Settings files from before these options existed get the defaults.
+        KeyChord? toggleHotkey = KeyChord.Default;
+        KeyChord? swapScreensHotkey = KeyChord.DefaultSwapScreens;
         var panel = new JsonObject();
         var overrides = new List<ZoneOverride>();
 
@@ -91,13 +96,10 @@ public sealed class SettingsDocument
                     fancyZonesDataFolder = Read<string?>(value, name);
                     break;
                 case "togglehotkey":
-                    var keys = Read<string?>(value, name);
-                    toggleHotkey = null;
-                    if (!string.IsNullOrWhiteSpace(keys) && !KeyChord.TryParse(keys, out toggleHotkey, out var keyError))
-                    {
-                        throw new SettingsException($"{name}: {keyError}.");
-                    }
-
+                    toggleHotkey = ReadChord(value, name);
+                    break;
+                case "swapscreenshotkey":
+                    swapScreensHotkey = ReadChord(value, name);
                     break;
                 case "panel":
                     panel = value as JsonObject ?? throw new SettingsException("\"panel\" must be an object.");
@@ -120,7 +122,13 @@ public sealed class SettingsDocument
             StartWithWindows = startWithWindows,
             FancyZonesDataFolder = fancyZonesDataFolder,
             ToggleHotkey = toggleHotkey,
+            SwapScreensHotkey = swapScreensHotkey,
         };
+
+        if (toggleHotkey is not null && toggleHotkey.ToString() == swapScreensHotkey?.ToString())
+        {
+            throw new SettingsException("toggleHotkey and swapScreensHotkey can't be the same keys.");
+        }
 
         // Surface mistakes now rather than when a matching zone shows up.
         BuildStyle(document._panel, "panel");
@@ -229,6 +237,17 @@ public sealed class SettingsDocument
 
         style.Normalize();
         return style;
+    }
+
+    private static KeyChord? ReadChord(JsonNode? value, string name)
+    {
+        var keys = Read<string?>(value, name);
+        if (string.IsNullOrWhiteSpace(keys))
+        {
+            return null;
+        }
+
+        return KeyChord.TryParse(keys, out var chord, out var error) ? chord : throw new SettingsException($"{name}: {error}.");
     }
 
     private static T Read<T>(JsonNode? value, string name)

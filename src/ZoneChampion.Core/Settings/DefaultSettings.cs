@@ -21,6 +21,11 @@ public static class DefaultSettings
           // only with LCtrl, RCtrl, LAlt, RAlt, LShift, RShift, LWin, RWin. null turns this off.
           "toggleHotkey": "Ctrl+Win",
 
+          // Press and release these keys together to swap every window between your two monitors, keeping each
+          // window's position (scaled if the monitors differ). Do it again to swap back. Same key rules as above.
+          // Only works with exactly two monitors. null turns this off.
+          "swapScreensHotkey": "Ctrl+Alt+Win",
+
           // Style shared by every panel. Any of these can be overridden for one zone under "zones" below.
           "panel": {
             // ---- Placement ----

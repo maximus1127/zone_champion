@@ -22,7 +22,8 @@ internal sealed class AppController : IDisposable
     private WindowTracker? _tracker;
     private PanelManager? _panels;
     private TrayIcon? _tray;
-    private ToggleHotkeyHook? _hotkey;
+    private HotkeyHook? _hotkeys;
+    private long _swapBusyUntil;
     private FileSystemWatcher? _fancyZonesWatcher;
     private DispatcherTimer? _zoneReload;
     private DispatcherTimer? _heartbeat;
@@ -57,6 +58,7 @@ internal sealed class AppController : IDisposable
         _tray = new TrayIcon();
         _tray.IdentifyZones += IdentifyZones;
         _tray.TogglePanels += TogglePanels;
+        _tray.SwapScreens += SwapScreens;
         _tray.EditSettings += () => OpenInShell(_settings.FilePath, edit: true);
         _tray.OpenSettingsFolder += () => OpenInShell(Log.FolderPath, edit: false);
         _tray.Reload += () =>
@@ -74,8 +76,8 @@ internal sealed class AppController : IDisposable
             _tray.ShowWarning("Settings not applied", error);
         }
 
-        _hotkey = new ToggleHotkeyHook(() => _dispatcher.BeginInvoke(TogglePanels));
-        ApplyToggleHotkey();
+        _hotkeys = new HotkeyHook();
+        ApplyHotkeys();
 
         _zoneReload = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Normal, (_, _) =>
         {
@@ -106,17 +108,57 @@ internal sealed class AppController : IDisposable
         Log.Info(hidden ? "Panels hidden" : "Panels shown");
     }
 
-    private void ApplyToggleHotkey()
+    /// <summary>Swaps every window between the two monitors. Shared by the tray menu and the swap screens hotkey.</summary>
+    private void SwapScreens()
     {
-        var hotkey = _settings.Current.ToggleHotkey;
-        _hotkey?.SetChord(hotkey);
-        _tray?.SetToggleHotkey(hotkey?.ToString());
+        if (_tracker is null)
+        {
+            return;
+        }
+
+        // Windows are still settling from the last swap (WindowActions.MoveTo re-applies after 250 ms); reading their
+        // positions now would send some of them the wrong way.
+        if (Environment.TickCount64 < _swapBusyUntil)
+        {
+            return;
+        }
+
+        var monitors = Monitors.Enumerate();
+        if (monitors.Count != 2)
+        {
+            _tray?.ShowWarning("Can't swap screens", $"Swapping screens needs exactly two monitors, and {monitors.Count} are connected.");
+            return;
+        }
+
+        _swapBusyUntil = Environment.TickCount64 + 500;
+        int moved = ScreenSwapper.Swap(monitors[0], monitors[1], _tracker.IsTaskbarWindow, _dispatcher);
+        Log.Info($"Swapped {moved} windows between {monitors[0].DeviceName} and {monitors[1].DeviceName}");
+    }
+
+    private void ApplyHotkeys()
+    {
+        var toggle = _settings.Current.ToggleHotkey;
+        var swap = _settings.Current.SwapScreensHotkey;
+        var bindings = new List<HotkeyBinding>();
+        if (toggle is not null)
+        {
+            bindings.Add(new HotkeyBinding("Toggle panels", toggle, () => _dispatcher.BeginInvoke(TogglePanels)));
+        }
+
+        if (swap is not null)
+        {
+            bindings.Add(new HotkeyBinding("Swap screens", swap, () => _dispatcher.BeginInvoke(SwapScreens)));
+        }
+
+        _hotkeys?.SetBindings(bindings);
+        _tray?.SetToggleHotkey(toggle?.ToString());
+        _tray?.SetSwapScreensHotkey(swap?.ToString());
     }
 
     private void OnSettingsChanged()
     {
         AutoStart.Apply(_settings.Current.StartWithWindows);
-        ApplyToggleHotkey();
+        ApplyHotkeys();
         if (!string.Equals(_fancyZonesFolder, FancyZonesFolder, StringComparison.OrdinalIgnoreCase))
         {
             ReloadZones();
@@ -276,7 +318,7 @@ internal sealed class AppController : IDisposable
 
     public void Dispose()
     {
-        _hotkey?.Dispose();
+        _hotkeys?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _heartbeat?.Stop();
         _zoneReload?.Stop();

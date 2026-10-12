@@ -18,6 +18,16 @@ public class SettingsDocumentTests
         Assert.True(SettingsDocument.Default.StartWithWindows);
         Assert.Null(SettingsDocument.Default.FancyZonesDataFolder);
         Assert.Equal("Ctrl+Win", SettingsDocument.Default.ToggleHotkey?.ToString());
+        Assert.Equal("Ctrl+Alt+Win", SettingsDocument.Default.SwapScreensHotkey?.ToString());
+    }
+
+    [Theory]
+    [InlineData("{ }", "Ctrl+Alt+Win")]
+    [InlineData("""{ "swapScreensHotkey": "RCtrl+RAlt" }""", "RCtrl+RAlt")]
+    [InlineData("""{ "swapScreensHotkey": null }""", null)]
+    public void SwapScreensHotkey_DefaultsWhenMissingAndCanBeTurnedOff(string json, string? expected)
+    {
+        Assert.Equal(expected, SettingsDocument.Parse(json).SwapScreensHotkey?.ToString());
     }
 
     [Theory]
@@ -77,6 +87,8 @@ public class SettingsDocumentTests
     [InlineData("""{ "pannel": {} }""", "Unknown setting \"pannel\"")]
     [InlineData("""{ "panel": { """, "isn't valid JSON")]
     [InlineData("""{ "toggleHotkey": "Tab+Space" }""", "toggleHotkey: \"Tab\" isn't a modifier key")]
+    [InlineData("""{ "swapScreensHotkey": "Ctrl+Q" }""", "swapScreensHotkey: \"Q\" isn't a modifier key")]
+    [InlineData("""{ "toggleHotkey": "Ctrl+Alt+Win" }""", "can't be the same keys")]
     public void InvalidSettings_ExplainTheProblem(string json, string expectedMessagePart)
     {
         var ex = Assert.Throws<SettingsException>(() => SettingsDocument.Parse(json));

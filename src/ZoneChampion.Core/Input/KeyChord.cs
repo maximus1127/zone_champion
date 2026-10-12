@@ -43,6 +43,8 @@ public sealed class KeyChord
 
     public static KeyChord Default { get; } = Parse("Ctrl+Win");
 
+    public static KeyChord DefaultSwapScreens { get; } = Parse("Ctrl+Alt+Win");
+
     /// <summary>Whether <paramref name="virtualKey"/> is one of this chord's keys.</summary>
     public bool Contains(int virtualKey) => _groups.Any(g => g.Keys.Contains(virtualKey));
 

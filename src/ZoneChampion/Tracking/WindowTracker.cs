@@ -205,7 +205,7 @@ internal sealed class WindowTracker : IDisposable
     }
 
     /// <summary>Approximates the taskbar's rules for which windows get a button.</summary>
-    private bool IsTaskbarWindow(nint hwnd)
+    public bool IsTaskbarWindow(nint hwnd)
     {
         if (!IsWindowVisible(hwnd))
         {

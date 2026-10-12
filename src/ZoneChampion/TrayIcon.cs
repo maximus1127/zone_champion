@@ -9,6 +9,7 @@ internal sealed class TrayIcon : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ToolStripMenuItem _hideItem;
+    private readonly Forms.ToolStripMenuItem _swapItem;
 
     public TrayIcon()
     {
@@ -23,6 +24,8 @@ internal sealed class TrayIcon : IDisposable
         menu.Items.Add(Item("Identify zones", () => IdentifyZones?.Invoke()));
         _hideItem = Item("Hide panels", () => TogglePanels?.Invoke());
         menu.Items.Add(_hideItem);
+        _swapItem = Item("Swap screens", () => SwapScreens?.Invoke());
+        menu.Items.Add(_swapItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(Item("Edit settings", () => EditSettings?.Invoke()));
         menu.Items.Add(Item("Open settings folder", () => OpenSettingsFolder?.Invoke()));
@@ -42,6 +45,7 @@ internal sealed class TrayIcon : IDisposable
 
     public event Action? IdentifyZones;
     public event Action? TogglePanels;
+    public event Action? SwapScreens;
     public event Action? EditSettings;
     public event Action? OpenSettingsFolder;
     public event Action? Reload;
@@ -55,6 +59,9 @@ internal sealed class TrayIcon : IDisposable
 
     /// <summary>Shows the toggle hotkey beside the Hide/Show panels item, or nothing if it's turned off.</summary>
     public void SetToggleHotkey(string? hotkey) => _hideItem.ShortcutKeyDisplayString = hotkey ?? "";
+
+    /// <summary>Shows the swap screens hotkey beside its menu item, or nothing if it's turned off.</summary>
+    public void SetSwapScreensHotkey(string? hotkey) => _swapItem.ShortcutKeyDisplayString = hotkey ?? "";
 
     public void ShowWarning(string title, string message) =>
         _icon.ShowBalloonTip(8000, title, message, Forms.ToolTipIcon.Warning);

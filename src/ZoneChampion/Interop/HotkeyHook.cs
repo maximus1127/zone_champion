@@ -5,45 +5,48 @@ using static ZoneChampion.Interop.Native;
 
 namespace ZoneChampion.Interop;
 
+/// <summary>A modifier chord to watch for and what to do when it's tapped.</summary>
+/// <param name="Name">Used in log messages, e.g. "Toggle hotkey".</param>
+/// <param name="OnTap">Called on the hook thread when the chord is tapped; marshal to the UI thread.</param>
+internal sealed record HotkeyBinding(string Name, KeyChord Chord, Action OnTap);
+
 /// <summary>
-/// Watches the keyboard system-wide for a tap of a modifier chord (default Ctrl+Win). Windows' RegisterHotKey can't
-/// register modifier-only hotkeys, so this uses a low-level keyboard hook. The hook runs on its own thread so busy
-/// UI work never delays anyone's typing (Windows also drops hooks that answer too slowly). Keys are never blocked.
+/// Watches the keyboard system-wide for taps of modifier chords (default Ctrl+Win and Ctrl+Alt+Win). Windows'
+/// RegisterHotKey can't register modifier-only hotkeys, so this uses a low-level keyboard hook. The hook runs on its
+/// own thread so busy UI work never delays anyone's typing (Windows also drops hooks that answer too slowly). Keys are
+/// never blocked.
 /// </summary>
-internal sealed class ToggleHotkeyHook : IDisposable
+internal sealed class HotkeyHook : IDisposable
 {
     private const uint WM_RECONFIGURE = WM_APP + 1;
 
     // Marks our own injected keys so the hook ignores them.
     private static readonly nuint InjectedTag = 0x5A43484B;
 
-    private readonly Action _onToggle;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _started = new();
     private readonly object _gate = new();
-    private KeyChord? _requestedChord;
+    private IReadOnlyList<HotkeyBinding> _requestedBindings = [];
     private HookProc? _callback;
     private uint _threadId;
 
     // Hook thread only.
     private nint _hook;
-    private ChordTapTracker? _tracker;
+    private List<(HotkeyBinding Binding, ChordTapTracker Tracker)> _trackers = new();
 
-    /// <param name="onToggle">Called on the hook thread when the chord is tapped; marshal to the UI thread.</param>
-    public ToggleHotkeyHook(Action onToggle)
+    public HotkeyHook()
     {
-        _onToggle = onToggle;
-        _thread = new Thread(Run) { IsBackground = true, Name = "Toggle hotkey hook" };
+        _thread = new Thread(Run) { IsBackground = true, Name = "Hotkey hook" };
         _thread.Start();
         _started.Wait();
     }
 
-    /// <summary>Sets the chord to watch for, or null to remove the hook entirely.</summary>
-    public void SetChord(KeyChord? chord)
+    /// <summary>Sets the chords to watch for; with none, the hook is removed entirely.</summary>
+    public void SetBindings(IReadOnlyList<HotkeyBinding> bindings)
     {
         lock (_gate)
         {
-            _requestedChord = chord;
+            _requestedBindings = bindings;
         }
 
         PostThreadMessage(_threadId, WM_RECONFIGURE, 0, 0);
@@ -70,46 +73,50 @@ internal sealed class ToggleHotkeyHook : IDisposable
 
     private void Reconfigure()
     {
-        KeyChord? chord;
+        IReadOnlyList<HotkeyBinding> bindings;
         lock (_gate)
         {
-            chord = _requestedChord;
+            bindings = _requestedBindings;
         }
 
         // Settings reloads create new chord objects; only restart tracking when the keys actually changed.
-        if (chord?.ToString() == _tracker?.Chord.ToString())
+        static string Describe(IEnumerable<HotkeyBinding> list) => string.Join(", ", list.Select(b => $"{b.Name}: {b.Chord}"));
+        string description = Describe(bindings);
+        if (description == Describe(_trackers.Select(t => t.Binding)))
         {
             return;
         }
 
-        if (chord is null)
+        _trackers = bindings
+            .Select(b => (b, new ChordTapTracker(b.Chord, vk => (GetAsyncKeyState(vk) & 0x8000) != 0)))
+            .ToList();
+
+        if (_trackers.Count == 0)
         {
-            _tracker = null;
             RemoveHook();
-            Log.Info("Toggle hotkey turned off");
+            Log.Info("Hotkeys turned off");
             return;
         }
 
-        _tracker = new ChordTapTracker(chord, vk => (GetAsyncKeyState(vk) & 0x8000) != 0);
         if (_hook == 0)
         {
             _callback = OnHook;
             _hook = SetWindowsHookEx(WH_KEYBOARD_LL, _callback, GetModuleHandle(null), 0);
             if (_hook == 0)
             {
-                Log.Warn($"Couldn't install keyboard hook for the toggle hotkey (error {Marshal.GetLastWin32Error()})");
+                Log.Warn($"Couldn't install keyboard hook for the hotkeys (error {Marshal.GetLastWin32Error()})");
                 return;
             }
         }
 
-        Log.Info($"Toggle hotkey: {chord}");
+        Log.Info($"Hotkeys: {description}");
     }
 
     private nint OnHook(int code, nint wParam, nint lParam)
     {
         try
         {
-            if (code >= 0 && _tracker is { } tracker)
+            if (code >= 0 && _trackers.Count > 0)
             {
                 var info = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                 int message = (int)wParam;
@@ -117,15 +124,21 @@ internal sealed class ToggleHotkeyHook : IDisposable
                 bool up = message is WM_KEYUP or WM_SYSKEYUP;
                 if (info.dwExtraInfo != InjectedTag && (down || up))
                 {
-                    var decision = tracker.OnKey(new KeyStroke((int)info.vkCode, (info.flags & LLKHF_EXTENDED) != 0, down));
-                    if (decision.Inject.Count > 0)
+                    var stroke = new KeyStroke((int)info.vkCode, (info.flags & LLKHF_EXTENDED) != 0, down);
+                    var decisions = _trackers.Select(t => (t.Binding, Decision: t.Tracker.OnKey(stroke))).ToList();
+
+                    // Every tracker asks for the same mask key; sending it once is enough.
+                    if (decisions.Select(d => d.Decision.Inject).FirstOrDefault(i => i.Count > 0) is { } inject)
                     {
-                        Send(decision.Inject);
+                        Send(inject);
                     }
 
-                    if (decision.Toggle)
+                    foreach (var (binding, decision) in decisions)
                     {
-                        _onToggle();
+                        if (decision.Toggle)
+                        {
+                            binding.OnTap();
+                        }
                     }
                 }
             }

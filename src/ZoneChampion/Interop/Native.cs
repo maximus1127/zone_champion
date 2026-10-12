@@ -29,8 +29,14 @@ internal static class Native
     public const uint SMTO_ABORTIFHUNG = 0x0002;
     public const uint SMTO_BLOCK = 0x0001;
 
+    public const int SW_MAXIMIZE = 3;
+    public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_MINIMIZE = 6;
+    public const int SW_SHOWMINNOACTIVE = 7;
     public const int SW_RESTORE = 9;
+
+    public const int WPF_RESTORETOMAXIMIZED = 0x0002;
+    public const int WPF_ASYNCWINDOWPLACEMENT = 0x0004;
 
     public static readonly nint HWND_TOPMOST = -1;
     public const uint SWP_NOSIZE = 0x0001;
@@ -350,6 +356,9 @@ internal static class Native
 
     [DllImport("user32.dll")]
     public static extern bool GetWindowPlacement(nint hwnd, ref WINDOWPLACEMENT placement);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPlacement(nint hwnd, ref WINDOWPLACEMENT placement);
 
     [DllImport("user32.dll")]
     public static extern nint MonitorFromWindow(nint hwnd, uint flags);

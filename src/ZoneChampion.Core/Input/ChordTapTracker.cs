@@ -4,7 +4,7 @@ namespace ZoneChampion.Core.Input;
 public readonly record struct KeyStroke(int VirtualKey, bool Extended, bool Down);
 
 /// <param name="Inject">Synthetic key events to send, in order. Real key events are never blocked.</param>
-/// <param name="Toggle">The chord was tapped: toggle the panels.</param>
+/// <param name="Toggle">The chord was tapped: run its action.</param>
 public sealed record ChordDecision(IReadOnlyList<KeyStroke> Inject, bool Toggle)
 {
     public static ChordDecision None { get; } = new([], false);
@@ -12,7 +12,8 @@ public sealed record ChordDecision(IReadOnlyList<KeyStroke> Inject, bool Toggle)
 
 /// <summary>
 /// Detects a "tap" of a modifier chord such as Ctrl+Win: every chord key pressed, then all of them released, with no
-/// other key pressed in between. Shortcuts that start with the chord (Ctrl+Win+Left...) never count as a tap.
+/// other key pressed or held in between. Shortcuts that start with the chord (Ctrl+Win+Left...) never count as a tap,
+/// and neither does a bigger chord containing it (Ctrl+Alt+Win is not a tap of Ctrl+Win, whichever key went first).
 /// Fed every keyboard event system-wide; pure logic, the Windows hook lives in the app.
 /// </summary>
 /// <param name="isKeyDown">
@@ -25,6 +26,7 @@ public sealed class ChordTapTracker(KeyChord chord, Func<int, bool>? isKeyDown =
     public const int MaskKey = 0xE8;
 
     private readonly HashSet<int> _down = new();
+    private readonly HashSet<int> _otherDown = new();
     private bool _armed;
     private bool _spoiled;
 
@@ -34,7 +36,14 @@ public sealed class ChordTapTracker(KeyChord chord, Func<int, bool>? isKeyDown =
     {
         if (!Chord.Contains(key.VirtualKey))
         {
-            if (key.Down && _down.Count > 0)
+            if (!key.Down)
+            {
+                _otherDown.Remove(key.VirtualKey);
+                return ChordDecision.None;
+            }
+
+            _otherDown.Add(key.VirtualKey);
+            if (_down.Count > 0)
             {
                 _spoiled = true;
             }
@@ -44,6 +53,13 @@ public sealed class ChordTapTracker(KeyChord chord, Func<int, bool>? isKeyDown =
 
         if (key.Down)
         {
+            if (_down.Count == 0)
+            {
+                // A key already held when the chord starts (Alt in Alt, Ctrl, Win) makes it a different shortcut.
+                ForgetReleasedKeys(_otherDown);
+                _spoiled = _otherDown.Count > 0;
+            }
+
             _down.Add(key.VirtualKey);
             if (_armed || _spoiled || !Chord.IsSatisfiedBy(_down))
             {
@@ -60,10 +76,7 @@ public sealed class ChordTapTracker(KeyChord chord, Func<int, bool>? isKeyDown =
         }
 
         _down.Remove(key.VirtualKey);
-        if (isKeyDown is not null)
-        {
-            _down.RemoveWhere(k => !isKeyDown(k));
-        }
+        ForgetReleasedKeys(_down);
 
         if (_down.Count > 0)
         {
@@ -74,6 +87,14 @@ public sealed class ChordTapTracker(KeyChord chord, Func<int, bool>? isKeyDown =
         _armed = false;
         _spoiled = false;
         return tapped ? new ChordDecision([], true) : ChordDecision.None;
+    }
+
+    private void ForgetReleasedKeys(HashSet<int> keys)
+    {
+        if (isKeyDown is not null)
+        {
+            keys.RemoveWhere(k => !isKeyDown(k));
+        }
     }
 
     private static bool NeedsMask(int virtualKey) => virtualKey is

@@ -8,6 +8,7 @@ public class ChordTapTrackerTests
     private const int RCtrl = KeyChord.VK_RCONTROL;
     private const int LWin = KeyChord.VK_LWIN;
     private const int LShift = KeyChord.VK_LSHIFT;
+    private const int LAlt = KeyChord.VK_LMENU;
     private const int Left = 0x25;
     private const int C = 0x43;
 
@@ -135,5 +136,40 @@ public class ChordTapTrackerTests
         Assert.False(tracker.OnKey(Up(LWin)).Toggle);
         physicallyDown.Remove(LCtrl);
         Assert.True(tracker.OnKey(Up(LCtrl)).Toggle);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BiggerChordContainingItIsNotATap(bool altFirst)
+    {
+        // Ctrl+Alt+Win (the swap screens chord) must not also toggle Ctrl+Win, whichever key goes down first.
+        var tracker = new ChordTapTracker(KeyChord.Default);
+        KeyStroke[] keys = altFirst
+            ? [Down(LAlt), Down(LCtrl), Down(LWin), Up(LWin), Up(LCtrl), Up(LAlt)]
+            : [Down(LCtrl), Down(LWin), Down(LAlt), Up(LAlt), Up(LWin), Up(LCtrl)];
+
+        Assert.Equal(0, CountToggles(tracker, keys));
+        Assert.Equal(1, CountToggles(tracker, Down(LCtrl), Down(LWin), Up(LWin), Up(LCtrl)));
+    }
+
+    [Fact]
+    public void BiggerChordTriggersItself()
+    {
+        var tracker = new ChordTapTracker(KeyChord.Parse("Ctrl+Alt+Win"));
+
+        Assert.Equal(1, CountToggles(tracker, Down(LAlt), Down(LCtrl), Down(LWin), Up(LWin), Up(LCtrl), Up(LAlt)));
+    }
+
+    [Fact]
+    public void OtherKeyWhoseReleaseWasMissedIsForgotten()
+    {
+        // Alt's release never reached the hook; it mustn't block the next tap forever.
+        var physicallyDown = new HashSet<int> { LAlt };
+        var tracker = new ChordTapTracker(KeyChord.Default, physicallyDown.Contains);
+        tracker.OnKey(Down(LAlt));
+        physicallyDown.Clear();
+
+        Assert.Equal(1, CountToggles(tracker, Down(LCtrl), Down(LWin), Up(LWin), Up(LCtrl)));
     }
 }
